@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>UC Auction</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c26;
+    --border: #2a2a3a;
+    --accent: #7c3aed;
+    --accent-light: #a855f7;
+    --gold: #f59e0b;
+    --gold-light: #fcd34d;
+    --danger: #ef4444;
+    --success: #10b981;
+    --text: #f1f1f5;
+    --muted: #6b6b80;
+    --radius: 16px;
+  }
+
+  html, body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* NAV */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10,10,15,0.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .nav-logo span { color: var(--gold); }
+
+  .nav-balance {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+    background: var(--surface);
+  }
+
+  .tab {
+    flex: 1;
+    padding: 12px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .tab.active {
+    color: var(--accent-light);
+    border-bottom-color: var(--accent-light);
+  }
+
+  /* PAGES */
+  .page { display: none; padding: 16px; }
+  .page.active { display: block; }
+
+  /* AUCTION CARD */
+  .auction-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 16px;
+    position: relative;
+  }
+
+  .auction-card.featured { border-color: var(--gold); }
+  .auction-card.featured::before {
+    content: '🔥 ХИТ';
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: var(--gold);
+    color: #000;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+  }
+
+  .auction-header {
+    background: linear-gradient(135deg, var(--accent) 0%, #1e1030 100%);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .auction-icon {
+    width: 56px;
+    height: 56px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    flex-shrink: 0;
+  }
+
+  .auction-info { flex: 1; }
+  .auction-title { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+  .auction-subtitle { font-size: 13px; color: rgba(255,255,255,0.6); }
+
+  .auction-body { padding: 16px; }
+
+  .auction-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .stat-box {
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+  }
+
+  .stat-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+  .stat-value { font-size: 16px; font-weight: 700; }
+  .stat-value.gold { color: var(--gold); }
+  .stat-value.danger { color: var(--danger); }
+  .stat-value.success { color: var(--success); }
+
+  /* TIMER */
+  .timer-section {
+    background: var(--surface2);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .timer-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+
+  .timer-display {
+    font-size: 28px;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -1px;
+  }
+
+  .timer-display.urgent { color: var(--danger); animation: blink 0.5s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  .timer-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+
+  .timer-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--gold));
+    border-radius: 2px;
+    transition: width 1s linear;
+  }
+
+  /* BID BUTTON */
+  .bid-btn {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .bid-btn:active { transform: scale(0.97); }
+  .bid-btn.placed { background: linear-gradient(135deg, var(--success), #059669); }
+  .bid-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .bid-cost {
+    background: rgba(255,255,255,0.15);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* BIDS FEED */
+  .bids-feed {
+    margin-top: 12px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .bid-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn { from { opacity:0; transform: translateY(-8px); } to { opacity:1; transform: translateY(0); } }
+
+  .bid-item:last-child { border-bottom: none; }
+  .bid-avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .bid-name { flex: 1; font-weight: 500; }
+  .bid-price { color: var(--gold); font-weight: 600; }
+  .bid-time { color: var(--muted); font-size: 11px; }
+
+  /* WINNER BANNER */
+  .winner-banner {
+    background: linear-gradient(135deg, #065f46, #064e3b);
+    border: 1px solid var(--success);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+
+  .winner-banner .emoji { font-size: 32px; margin-bottom: 8px; }
+  .winner-banner h3 { font-size: 18px; font-weight: 800; color: var(--success); }
+  .winner-banner p { font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 4px; }
+
+  /* DISCOUNT BANNER */
+  .discount-banner {
+    background: linear-gradient(135deg, #1e1a00, #2d2400);
+    border: 1px solid var(--gold);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .discount-banner h3 { font-size: 15px; font-weight: 700; color: var(--gold); margin-bottom: 4px; }
+  .discount-banner p { font-size: 13px; color: rgba(255,255,255,0.7); }
+
+  .buy-discounted {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--gold), #d97706);
+    border: none;
+    border-radius: 12px;
+    color: #000;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 12px;
+    transition: transform 0.1s;
+  }
+
+  .buy-discounted:active { transform: scale(0.97); }
+
+  /* SHOP PAGE */
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+  }
+
+  .shop-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .shop-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .shop-item:active { border-color: var(--accent-light); }
+  .shop-item-icon { font-size: 24px; margin-bottom: 8px; }
+  .shop-item-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .shop-item-price { font-size: 13px; color: var(--gold); font-weight: 600; }
+  .shop-item-original { font-size: 11px; color: var(--muted); text-decoration: line-through; }
+
+  /* BID PACKS */
+  .pack-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .pack-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .pack-item.popular { border-color: var(--accent-light); }
+  .pack-item.popular::before {
+    content: 'ПОПУЛЯРНЫЙ';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent-light);
+    color: white;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 10px;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+
+  .pack-bids { font-size: 22px; font-weight: 900; color: var(--accent-light); }
+  .pack-label { font-size: 11px; color: var(--muted); margin: 2px 0 8px; }
+  .pack-price { font-size: 14px; font-weight: 700; }
+  .pack-per { font-size: 11px; color: var(--muted); }
+
+  .buy-pack-btn {
+    width: 100%;
+    padding: 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: background 0.2s;
+  }
+
+  .buy-pack-btn:active { background: var(--accent); border-color: var(--accent); }
+
+  /* PROFILE PAGE */
+  .profile-header {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .profile-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  .profile-name { font-size: 18px; font-weight: 800; }
+  .profile-id { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .stats-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+  }
+
+  .stats-card .val { font-size: 22px; font-weight: 800; color: var(--accent-light); }
+  .stats-card .lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  .history-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .history-icon { font-size: 24px; width: 40px; text-align: center; }
+  .history-info { flex: 1; }
+  .history-title { font-size: 14px; font-weight: 600; }
+  .history-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .history-amount { font-size: 14px; font-weight: 700; }
+  .history-amount.win { color: var(--success); }
+  .history-amount.lose { color: var(--danger); }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 999;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: var(--success); color: var(--success); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+
+  /* BOTTOM NAV */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .nav-item {
+    padding: 10px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 500;
+    background: none;
+    border: none;
+    transition: color 0.2s;
+  }
+
+  .nav-item.active { color: var(--accent-light); }
+  .nav-item .icon { font-size: 22px; }
+
+  /* SPACER */
+  .spacer { height: 80px; }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<div class="nav">
+  <div class="nav-logo">⚡ UC <span>AUCTION</span></div>
+  <div class="nav-balance" id="balanceDisplay">🎯 <span id="bidCount">0</span> ставок</div>
+</div>
+
+<!-- PAGES -->
+
+<!-- AUCTIONS PAGE -->
+<div class="page active" id="page-auctions">
+
+  <!-- ACTIVE AUCTION -->
+  <div class="auction-card featured" id="mainAuction">
+    <div class="auction-header">
+      <div class="auction-icon">💎</div>
+      <div class="auction-info">
+        <div class="auction-title">660 UC</div>
+        <div class="auction-subtitle">PUBG Mobile · Unknown Cash</div>
+      </div>
+    </div>
+    <div class="auction-body">
+
+      <div class="auction-stats">
+        <div class="stat-box">
+          <div class="stat-label">Текущая цена</div>
+          <div class="stat-value gold" id="currentPrice">100 сум</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Ставок</div>
+          <div class="stat-value" id="bidsMade">1</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Лидер</div>
+          <div class="stat-value success" id="currentLeader" style="font-size:13px">Alisher</div>
+        </div>
+      </div>
+
+      <div class="timer-section">
+        <div>
+          <div class="timer-label">До конца</div>
+          <div class="timer-display" id="timerDisplay">30</div>
+          <div class="timer-bar"><div class="timer-fill" id="timerBar" style="width:100%"></div></div>
+        </div>
+        <div style="text-align:right">
+          <div class="timer-label">Рыночная цена</div>
+          <div style="font-size:16px;font-weight:700;color:var(--muted);text-decoration:line-through">96,000 сум</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">1 ставка = 2,000 сум</div>
+        </div>
+      </div>
+
+      <button class="bid-btn" id="bidBtn" onclick="placeBid()">
+        ⚡ Поставить ставку <span class="bid-cost">2,000 сум</span>
+      </button>
+
+      <!-- BIDS FEED -->
+      <div class="bids-feed" id="bidsFeed"></div>
+
+    </div>
+  </div>
+
+  <!-- ENDED AUCTION (скидка) -->
+  <div id="discountSection" style="display:none">
+    <div class="discount-banner">
+      <h3>💰 Ты проиграл — но есть скидка!</h3>
+      <p>Ты потратил <strong id="lostAmount">0 сум</strong> на ставки.<br>
+      Купи 660 UC со скидкой — заплати только <strong id="discountedPrice">0 сум</strong> вместо 96,000 сум.</p>
+      <button class="buy-discounted" onclick="buyDiscounted()">
+        Купить 660 UC за <span id="finalPrice">0</span> сум
+      </button>
+    </div>
+  </div>
+
+  <!-- NEXT AUCTION -->
+  <div class="auction-card">
+    <div class="auction-header" style="background: linear-gradient(135deg, #1a2744 0%, #0f1520 100%);">
+      <div class="auction-icon">🎮</div>
+      <div class="auction-info">
+        <div class="auction-title">325 UC</div>
+        <div class="auction-subtitle">PUBG Mobile · Скоро</div>
+      </div>
+    </div>
+    <div class="auction-body">
+      <div style="text-align:center;padding:16px;color:var(--muted)">
+        <div style="font-size:32px;margin-bottom:8px">⏳</div>
+        <div style="font-weight:600">Начнётся через 15 минут</div>
+        <div style="font-size:13px;margin-top:4px">Рыночная цена: 48,500 сум</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+</div>
+
+<!-- SHOP PAGE -->
+<div class="page" id="page-shop">
+
+  <div class="section-title">Пакеты ставок</div>
+  <div class="pack-grid">
+    <div class="pack-item" onclick="buyPack(10, 20000)">
+      <div class="pack-bids">10</div>
+      <div class="pack-label">ставок</div>
+      <div class="pack-price">20,000 сум</div>
+      <div class="pack-per">2,000 сум/шт</div>
+      <button class="buy-pack-btn">Купить</button>
+    </div>
+    <div class="pack-item popular" onclick="buyPack(30, 55000)">
+      <div class="pack-bids">30</div>
+      <div class="pack-label">ставок</div>
+      <div class="pack-price">55,000 сум</div>
+      <div class="pack-per">1,833 сум/шт</div>
+      <button class="buy-pack-btn">Купить</button>
+    </div>
+    <div class="pack-item" onclick="buyPack(60, 100000)">
+      <div class="pack-bids">60</div>
+      <div class="pack-label">ставок</div>
+      <div class="pack-price">100,000 сум</div>
+      <div class="pack-per">1,667 сум/шт</div>
+      <button class="buy-pack-btn">Купить</button>
+    </div>
+    <div class="pack-item" onclick="buyPack(100, 150000)">
+      <div class="pack-bids">100</div>
+      <div class="pack-label">ставок</div>
+      <div class="pack-price">150,000 сум</div>
+      <div class="pack-per">1,500 сум/шт</div>
+      <button class="buy-pack-btn">Купить</button>
+    </div>
+  </div>
+
+  <div class="section-title">Прямая покупка UC</div>
+  <div class="shop-grid">
+    <div class="shop-item">
+      <div class="shop-item-icon">💙</div>
+      <div class="shop-item-name">60 UC</div>
+      <div class="shop-item-price">10,000 сум</div>
+    </div>
+    <div class="shop-item">
+      <div class="shop-item-icon">💜</div>
+      <div class="shop-item-name">325 UC</div>
+      <div class="shop-item-price">55,000 сум</div>
+    </div>
+    <div class="shop-item">
+      <div class="shop-item-icon">💎</div>
+      <div class="shop-item-name">660 UC</div>
+      <div class="shop-item-price">96,000 сум</div>
+    </div>
+    <div class="shop-item">
+      <div class="shop-item-icon">👑</div>
+      <div class="shop-item-name">1800 UC</div>
+      <div class="shop-item-price">245,000 сум</div>
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+</div>
+
+<!-- PROFILE PAGE -->
+<div class="page" id="page-profile">
+
+  <div class="profile-header">
+    <div class="profile-avatar" id="profileAvatar">B</div>
+    <div>
+      <div class="profile-name" id="profileName">Бехзод</div>
+      <div class="profile-id" id="profileId">ID: @behzod</div>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stats-card">
+      <div class="val" id="statBids">0</div>
+      <div class="lbl">Ставок</div>
+    </div>
+    <div class="stats-card">
+      <div class="val" id="statWins">0</div>
+      <div class="lbl">Побед</div>
+    </div>
+    <div class="stats-card">
+      <div class="val" id="statSpent">0</div>
+      <div class="lbl">Потрачено</div>
+    </div>
+  </div>
+
+  <div class="section-title">История</div>
+  <div id="historyList">
+    <div class="history-item">
+      <div class="history-icon">🎯</div>
+      <div class="history-info">
+        <div class="history-title">Покупка 30 ставок</div>
+        <div class="history-date">Сегодня, 09:15</div>
+      </div>
+      <div class="history-amount lose">-55,000 сум</div>
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <button class="nav-item active" onclick="switchPage('auctions', this)">
+    <span class="icon">⚡</span>Аукцион
+  </button>
+  <button class="nav-item" onclick="switchPage('shop', this)">
+    <span class="icon">🛒</span>Магазин
+  </button>
+  <button class="nav-item" onclick="switchPage('profile', this)">
+    <span class="icon">👤</span>Профиль
+  </button>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// Telegram WebApp init
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  // Get user data from Telegram
+  const user = tg.initDataUnsafe?.user;
+  if (user) {
+    document.getElementById('profileName').textContent = user.first_name + (user.last_name ? ' ' + user.last_name : '');
+    document.getElementById('profileId').textContent = '@' + (user.username || user.id);
+    document.getElementById('profileAvatar').textContent = user.first_name[0];
+  }
+}
+
+// STATE
+let state = {
+  bids: 10, // demo: user has 10 bids
+  currentPrice: 100,
+  timeLeft: 30,
+  maxTime: 30,
+  bidCount: 1,
+  leader: 'Alisher',
+  myBids: 0,
+  mySpent: 0,
+  wins: 0,
+  auctionActive: true,
+  lastBidder: null
+};
+
+const MARKET_PRICE = 96000;
+const MAX_DISCOUNT = 15000;
+const BID_COST = 2000;
+
+// DEMO bids feed
+const demoUsers = ['Alisher', 'Bobur', 'Jasur', 'Doniyor', 'Sardor'];
+const bidFeed = [];
+
+function addBidToFeed(name, price, isMe) {
+  const colors = ['#7c3aed','#2563eb','#059669','#dc2626','#d97706'];
+  const color = isMe ? '#10b981' : colors[Math.floor(Math.random() * colors.length)];
+  const initial = name[0].toUpperCase();
+  const timeStr = new Date().toLocaleTimeString('ru-RU', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+  bidFeed.unshift({ name, price, color, initial, timeStr });
+  if (bidFeed.length > 8) bidFeed.pop();
+
+  renderFeed();
+}
+
+function renderFeed() {
+  const feed = document.getElementById('bidsFeed');
+  feed.innerHTML = bidFeed.map(b => `
+    <div class="bid-item">
+      <div class="bid-avatar" style="background:${b.color}">${b.initial}</div>
+      <div class="bid-name">${b.name}</div>
+      <div class="bid-price">${b.price.toLocaleString('ru-RU')} сум</div>
+      <div class="bid-time">${b.timeStr}</div>
+    </div>
+  `).join('');
+}
+
+// TIMER
+let timerInterval;
+
+function startTimer() {
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    if (!state.auctionActive) return;
+
+    state.timeLeft--;
+
+    const display = document.getElementById('timerDisplay');
+    const bar = document.getElementById('timerBar');
+
+    display.textContent = state.timeLeft;
+    display.className = 'timer-display' + (state.timeLeft <= 10 ? ' urgent' : '');
+    bar.style.width = (state.timeLeft / state.maxTime * 100) + '%';
+
+    if (state.timeLeft <= 0) {
+      endAuction();
+    }
+
+    // Demo: random bids from other users
+    if (state.timeLeft > 3 && Math.random() < 0.3 && state.auctionActive) {
+      const randomUser = demoUsers[Math.floor(Math.random() * demoUsers.length)];
+      if (randomUser !== state.lastBidder) {
+        simulateBid(randomUser);
+      }
+    }
+
+  }, 1000);
+}
+
+function simulateBid(userName) {
+  state.currentPrice += 100;
+  state.bidCount++;
+  state.leader = userName;
+  state.lastBidder = userName;
+  state.timeLeft = Math.min(state.timeLeft + 10, state.maxTime);
+
+  document.getElementById('currentPrice').textContent = state.currentPrice.toLocaleString('ru-RU') + ' сум';
+  document.getElementById('bidsMade').textContent = state.bidCount;
+  document.getElementById('currentLeader').textContent = userName;
+
+  addBidToFeed(userName, state.currentPrice, false);
+  updateBalance();
+}
+
+function placeBid() {
+  if (!state.auctionActive) return;
+  if (state.bids <= 0) {
+    showToast('❌ Нет ставок! Купи в магазине', 'error');
+    return;
+  }
+
+  state.bids--;
+  state.myBids++;
+  state.mySpent += BID_COST;
+  state.currentPrice += 100;
+  state.bidCount++;
+  state.leader = 'Ты';
+  state.lastBidder = 'me';
+  state.timeLeft = Math.min(state.timeLeft + 10, state.maxTime);
+
+  document.getElementById('currentPrice').textContent = state.currentPrice.toLocaleString('ru-RU') + ' сум';
+  document.getElementById('bidsMade').textContent = state.bidCount;
+  document.getElementById('currentLeader').textContent = '🟢 Ты';
+  document.getElementById('statBids').textContent = state.myBids;
+  document.getElementById('statSpent').textContent = (state.mySpent / 1000).toFixed(0) + 'K';
+
+  const btn = document.getElementById('bidBtn');
+  btn.classList.add('placed');
+  btn.textContent = '✅ Ставка сделана!';
+  setTimeout(() => {
+    btn.classList.remove('placed');
+    btn.innerHTML = '⚡ Поставить ставку <span class="bid-cost">2,000 сум</span>';
+  }, 800);
+
+  addBidToFeed('Ты', state.currentPrice, true);
+  updateBalance();
+  showToast('✅ Ставка принята!', 'success');
+}
+
+function endAuction() {
+  clearInterval(timerInterval);
+  state.auctionActive = false;
+
+  const isWinner = state.leader === 'Ты';
+  const btn = document.getElementById('bidBtn');
+  btn.disabled = true;
+
+  if (isWinner) {
+    state.wins++;
+    document.getElementById('statWins').textContent = state.wins;
+    btn.innerHTML = '🏆 Ты победил! ' + state.currentPrice.toLocaleString('ru-RU') + ' сум';
+    btn.style.background = 'linear-gradient(135deg, var(--success), #059669)';
+    showToast('🏆 Поздравляем! Ты выиграл аукцион!', 'success');
+  } else {
+    btn.innerHTML = '🔴 Аукцион завершён';
+    btn.style.background = 'var(--surface2)';
+
+    if (state.myBids > 0) {
+      const spent = state.myBids * BID_COST;
+      const discount = Math.min(spent, MAX_DISCOUNT);
+      const finalPrice = MARKET_PRICE - discount;
+
+      document.getElementById('lostAmount').textContent = spent.toLocaleString('ru-RU') + ' сум';
+      document.getElementById('discountedPrice').textContent = finalPrice.toLocaleString('ru-RU') + ' сум';
+      document.getElementById('finalPrice').textContent = finalPrice.toLocaleString('ru-RU');
+      document.getElementById('discountSection').style.display = 'block';
+    }
+  }
+}
+
+function buyDiscounted() {
+  showToast('📩 Напиши @ucauction_admin для оплаты', 'success');
+  if (tg) tg.openTelegramLink('https://t.me/ucauction_admin');
+}
+
+function buyPack(count, price) {
+  showToast(`📩 Напиши @ucauction_admin — ${count} ставок за ${price.toLocaleString('ru-RU')} сум`, 'success');
+  if (tg) tg.openTelegramLink('https://t.me/ucauction_admin');
+}
+
+function updateBalance() {
+  document.getElementById('bidCount').textContent = state.bids;
+}
+
+function switchPage(page, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  btn.classList.add('active');
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type || '');
+  clearTimeout(t._timeout);
+  t._timeout = setTimeout(() => t.className = 'toast', 2500);
+}
+
+// Init
+addBidToFeed('Alisher', 100, false);
+updateBalance();
+startTimer();
+</script>
+</body>
+</html>
