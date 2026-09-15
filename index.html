@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>UC Auction</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0a0a0f;--surface:#13131a;--surface2:#1c1c26;--border:#2a2a3a;
+  --accent:#7c3aed;--accent2:#a855f7;--gold:#f59e0b;--danger:#ef4444;
+  --success:#10b981;--text:#f1f1f5;--muted:#6b6b80;
+}
+html,body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* TERMS MODAL */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:flex-end;padding:16px}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;width:100%}
+.modal-icon{font-size:32px;text-align:center;margin-bottom:12px}
+.modal-title{font-size:18px;font-weight:800;text-align:center;margin-bottom:16px}
+.modal-text{font-size:13px;color:var(--muted);line-height:1.8;margin-bottom:20px}
+.modal-text b{color:var(--text)}
+.modal-btn{width:100%;padding:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:12px;color:white;font-size:16px;font-weight:700;cursor:pointer}
+
+.conn-bar{background:var(--danger);color:white;text-align:center;padding:6px;font-size:12px;font-weight:600;display:none}
+.conn-bar.show{display:block}
+.conn-bar.ok{background:var(--success)}
+
+.nav{position:sticky;top:0;z-index:100;background:rgba(10,10,15,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{font-size:18px;font-weight:800;letter-spacing:-0.5px}
+.nav-logo span{color:var(--gold)}
+.nav-right{display:flex;align-items:center;gap:8px}
+.nav-coins{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:13px;font-weight:600}
+.nav-level{background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700}
+
+.page{display:none;padding:16px 16px 80px}
+.page.active{display:block}
+
+/* AUCTION */
+.lot-card{background:var(--surface);border:1px solid var(--gold);border-radius:16px;overflow:hidden;margin-bottom:16px}
+.lot-header{background:linear-gradient(135deg,var(--accent) 0%,#1e1030 100%);padding:20px;display:flex;align-items:center;gap:16px}
+.lot-icon{width:56px;height:56px;background:rgba(255,255,255,0.1);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0}
+.lot-title{font-size:20px;font-weight:800;margin-bottom:4px}
+.lot-sub{font-size:13px;color:rgba(255,255,255,0.6)}
+.lot-body{padding:16px}
+
+.stats-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+.stat{background:var(--surface2);border-radius:10px;padding:10px;text-align:center}
+.stat-l{font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:500}
+.stat-v{font-size:16px;font-weight:700}
+.stat-v.gold{color:var(--gold)}
+.stat-v.green{color:var(--success)}
+
+.timer-box{background:var(--surface2);border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+.timer-num{font-size:36px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-1px}
+.timer-num.urgent{color:var(--danger);animation:blink .5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+.timer-bar{height:4px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden}
+.timer-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--gold));border-radius:2px;transition:width 1s linear}
+.timer-r{text-align:right;margin-left:16px}
+.timer-r .lbl{font-size:11px;color:var(--muted)}
+.timer-r .price{font-size:14px;font-weight:700;color:var(--muted);text-decoration:line-through}
+.timer-r .cost{font-size:11px;color:var(--muted);margin-top:3px}
+
+.bid-btn{width:100%;padding:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:12px;color:white;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .1s}
+.bid-btn:active{transform:scale(.97)}
+.bid-btn:disabled{opacity:.5;cursor:not-allowed}
+.bid-btn.ok{background:linear-gradient(135deg,var(--success),#059669)}
+.coin-badge{background:rgba(255,255,255,.15);padding:2px 8px;border-radius:10px;font-size:13px}
+
+.feed{margin-top:12px;max-height:140px;overflow-y:auto}
+.feed-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;animation:slideIn .3s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.feed-item:last-child{border-bottom:none}
+.feed-av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.feed-name{flex:1;font-weight:500}
+.feed-price{color:var(--gold);font-weight:600}
+.feed-time{color:var(--muted);font-size:11px}
+
+/* VOTE */
+.vote-card{background:var(--surface);border:1px solid var(--accent2);border-radius:16px;padding:20px;margin-bottom:16px;text-align:center}
+.vote-title{font-size:18px;font-weight:800;margin-bottom:8px}
+.vote-sub{font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5}
+.vote-btn{width:100%;padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;transition:all .2s}
+.vote-btn:active{border-color:var(--accent2);background:rgba(168,85,247,.1)}
+.vote-btn.voted{border-color:var(--success);background:rgba(16,185,129,.1)}
+.vote-bar{height:4px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
+.vote-fill{height:100%;background:var(--accent2);border-radius:2px;transition:width .5s}
+.vote-progress{margin-top:16px;font-size:13px;color:var(--muted)}
+.vote-countdown{font-size:20px;font-weight:800;color:var(--gold);margin-top:8px}
+
+/* WAITING */
+.waiting{text-align:center;padding:40px 20px}
+.waiting .ico{font-size:56px;margin-bottom:16px}
+.waiting h2{font-size:20px;font-weight:800;margin-bottom:8px}
+.waiting p{font-size:14px;color:var(--muted);line-height:1.5}
+
+/* RESULT */
+.result-win{background:linear-gradient(135deg,#065f46,#064e3b);border:1px solid var(--success);border-radius:14px;padding:20px;text-align:center;margin-bottom:16px}
+.result-win .ico{font-size:48px;margin-bottom:12px}
+.result-win h3{font-size:20px;font-weight:900;color:var(--success);margin-bottom:6px}
+.result-win p{font-size:13px;color:rgba(255,255,255,.75);line-height:1.5}
+.result-lose{background:linear-gradient(135deg,#1a1500,#2a2000);border:1px solid var(--gold);border-radius:14px;padding:20px;margin-bottom:16px}
+.result-lose .top{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.result-lose h3{font-size:17px;font-weight:800;color:var(--gold)}
+.result-lose p{font-size:13px;color:rgba(255,255,255,.7);line-height:1.5}
+.discount-num{font-size:24px;font-weight:900;color:var(--gold);margin:10px 0}
+.discount-btn{width:100%;padding:14px;background:linear-gradient(135deg,var(--gold),#d97706);border:none;border-radius:12px;color:#000;font-size:15px;font-weight:700;cursor:pointer;margin-top:12px}
+.discount-btn:active{transform:scale(.97)}
+
+.next-box{background:var(--surface2);border-radius:12px;padding:14px;text-align:center;margin-bottom:16px}
+.next-lbl{font-size:12px;color:var(--muted);margin-bottom:4px}
+.next-num{font-size:24px;font-weight:800;color:var(--accent2)}
+
+/* SHOP */
+.sec-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.pack-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px}
+.pack{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;cursor:pointer;position:relative}
+.pack.hot{border-color:var(--accent2)}
+.pack.hot::before{content:'⭐ ХИТ';position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--accent2);color:white;font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;white-space:nowrap}
+.pack-n{font-size:24px;font-weight:900;color:var(--accent2)}
+.pack-s{font-size:11px;color:var(--muted);margin:2px 0 8px}
+.pack-p{font-size:14px;font-weight:700}
+.pack-per{font-size:11px;color:var(--muted)}
+.pack-btn{width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;margin-top:10px}
+.pack-btn:active{background:var(--accent);border-color:var(--accent)}
+.uc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.uc-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer}
+.uc-ico{font-size:24px;margin-bottom:8px}
+.uc-name{font-size:14px;font-weight:700;margin-bottom:4px}
+.uc-price{font-size:13px;color:var(--gold);font-weight:600}
+
+/* PROFILE */
+.profile-head{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.avatar{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;flex-shrink:0}
+.p-name{font-size:18px;font-weight:800}
+.p-id{font-size:12px;color:var(--muted);margin-top:2px}
+.p-level{font-size:13px;font-weight:700;color:var(--accent2);margin-top:4px}
+
+.xp-bar-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+.xp-label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px}
+.xp-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.xp-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;transition:width .5s}
+
+.uc-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px}
+.uc-stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center}
+.uc-stat .val{font-size:20px;font-weight:800;color:var(--accent2)}
+.uc-stat.pending .val{color:var(--gold)}
+.uc-stat.done .val{color:var(--success)}
+.uc-stat .lbl{font-size:10px;color:var(--muted);margin-top:4px}
+
+.ref-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}
+.ref-title{font-size:14px;font-weight:700;margin-bottom:8px}
+.ref-link{font-size:12px;color:var(--accent2);word-break:break-all;margin-bottom:8px}
+.ref-copy{padding:8px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;border:none}
+
+.win-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.win-ico{font-size:28px;width:40px;text-align:center;flex-shrink:0}
+.win-info{flex:1}
+.win-title{font-size:14px;font-weight:700}
+.win-date{font-size:12px;color:var(--muted);margin-top:2px}
+.win-status{font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;display:inline-block;margin-top:4px}
+.s-pending{background:rgba(245,158,11,.15);color:var(--gold)}
+.s-done{background:rgba(16,185,129,.15);color:var(--success)}
+.win-price{font-size:14px;font-weight:700;color:var(--gold);text-align:right}
+
+/* LEADERBOARD */
+.lb-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.lb-rank{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0}
+.lb-rank.g{background:rgba(245,158,11,.2);color:var(--gold)}
+.lb-rank.s{background:rgba(148,163,184,.2);color:#94a3b8}
+.lb-rank.b{background:rgba(180,120,80,.2);color:#b47850}
+.lb-rank.o{background:var(--surface2);color:var(--muted)}
+.lb-name{flex:1;font-weight:600}
+.lb-sub{font-size:11px;color:var(--muted)}
+.lb-uc{text-align:right}
+.lb-uc .num{font-size:16px;font-weight:800;color:var(--accent2)}
+
+/* BOTTOM NAV */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom)}
+.nav-btn{padding:10px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;font-size:10px;color:var(--muted);font-weight:500;background:none;border:none;transition:color .2s}
+.nav-btn.active{color:var(--accent2)}
+.nav-btn .ico{font-size:22px}
+
+/* TOAST */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--surface);border:1px solid var(--border);border-radius:30px;padding:10px 20px;font-size:14px;font-weight:600;opacity:0;transition:all .3s;z-index:999;white-space:nowrap;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.ok{border-color:var(--success);color:var(--success)}
+.toast.err{border-color:var(--danger);color:var(--danger)}
+
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty .ico{font-size:40px;margin-bottom:12px}
+</style>
+</head>
+<body>
+
+<!-- TERMS MODAL -->
+<div class="modal" id="termsModal">
+  <div class="modal-box">
+    <div class="modal-icon">⚡</div>
+    <div class="modal-title">UC Auction</div>
+    <div class="modal-text">
+      Перед использованием:\n\n
+      🪙 <b>Коины невозвратны</b> — использованные ставки не возвращаются\n\n
+      🏆 <b>Победитель</b> — последний поставивший ставку до истечения таймера\n\n
+      🎁 <b>Скидка 15,000 сум</b> — для участников проигравшего аукциона\n\n
+      🗳 <b>Голосование</b> — игроки выбирают следующий лот\n\n
+      ⚠️ <b>Администрация</b> оставляет право аннулировать результаты при нарушениях
+    </div>
+    <button class="modal-btn" onclick="acceptTerms()">✅ Принимаю условия</button>
+  </div>
+</div>
+
+<div class="conn-bar" id="connBar">🔄 Подключение...</div>
+
+<div class="nav">
+  <div class="nav-logo">⚡ UC <span>AUCTION</span></div>
+  <div class="nav-right">
+    <div class="nav-level" id="navLevel">Lv1</div>
+    <div class="nav-coins">🪙 <span id="coinCount">0</span></div>
+  </div>
+</div>
+
+<!-- AUCTION PAGE -->
+<div class="page active" id="page-auction">
+  <div id="auctionContent"></div>
+</div>
+
+<!-- SHOP PAGE -->
+<div class="page" id="page-shop">
+  <div class="sec-label">Пакеты коинов</div>
+  <div class="pack-grid">
+    <div class="pack" onclick="buyCoins(10,5000)"><div class="pack-n">10</div><div class="pack-s">коинов</div><div class="pack-p">5,000 сум</div><div class="pack-per">500 сум/коин</div><button class="pack-btn">Купить</button></div>
+    <div class="pack hot" onclick="buyCoins(30,15000)"><div class="pack-n">30</div><div class="pack-s">коинов</div><div class="pack-p">15,000 сум</div><div class="pack-per">500 сум/коин</div><button class="pack-btn">Купить</button></div>
+    <div class="pack" onclick="buyCoins(60,30000)"><div class="pack-n">60</div><div class="pack-s">коинов</div><div class="pack-p">30,000 сум</div><div class="pack-per">500 сум/коин</div><button class="pack-btn">Купить</button></div>
+    <div class="pack" onclick="buyCoins(100,50000)"><div class="pack-n">100</div><div class="pack-s">коинов</div><div class="pack-p">50,000 сум</div><div class="pack-per">500 сум/коин</div><button class="pack-btn">Купить</button></div>
+  </div>
+  <div class="sec-label">Прямая покупка UC</div>
+  <div class="uc-grid">
+    <div class="uc-item"><div class="uc-ico">💙</div><div class="uc-name">60 UC</div><div class="uc-price">10,000 сум</div></div>
+    <div class="uc-item"><div class="uc-ico">💜</div><div class="uc-name">325 UC</div><div class="uc-price">55,000 сум</div></div>
+    <div class="uc-item"><div class="uc-ico">💎</div><div class="uc-name">660 UC</div><div class="uc-price">96,000 сум</div></div>
+    <div class="uc-item"><div class="uc-ico">👑</div><div class="uc-name">1800 UC</div><div class="uc-price">245,000 сум</div></div>
+  </div>
+</div>
+
+<!-- PROFILE PAGE -->
+<div class="page" id="page-profile">
+  <div class="profile-head">
+    <div class="avatar" id="pAvatar">?</div>
+    <div>
+      <div class="p-name" id="pName">Загрузка...</div>
+      <div class="p-id" id="pId"></div>
+      <div class="p-level" id="pLevel">🌱 Новичок</div>
+    </div>
+  </div>
+
+  <div class="xp-bar-wrap">
+    <div class="xp-label">
+      <span id="xpTitle">Прогресс</span>
+      <span id="xpNums">0 / 100 XP</span>
+    </div>
+    <div class="xp-bar"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+  </div>
+
+  <div class="ref-box">
+    <div class="ref-title">👥 Реферальная программа</div>
+    <div class="ref-link" id="refLink">Загрузка...</div>
+    <button class="ref-copy" onclick="copyRef()">📋 Скопировать ссылку</button>
+    <div style="font-size:12px;color:var(--muted);margin-top:8px">Приглашено: <span id="refCount">0</span> чел. | +5 коинов за каждого</div>
+  </div>
+
+  <div class="sec-label">Статистика UC</div>
+  <div class="uc-stats">
+    <div class="uc-stat"><div class="val" id="ucWon">0</div><div class="lbl">Выиграно</div></div>
+    <div class="uc-stat pending"><div class="val" id="ucPending">0</div><div class="lbl">К выводу</div></div>
+    <div class="uc-stat done"><div class="val" id="ucWithdrawn">0</div><div class="lbl">Выведено</div></div>
+  </div>
+
+  <div class="sec-label">История побед</div>
+  <div id="winHistory"></div>
+</div>
+
+<!-- LEADERBOARD PAGE -->
+<div class="page" id="page-top">
+  <div class="sec-label">🏆 Топ победителей</div>
+  <div id="lbList"></div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <button class="nav-btn active" onclick="go('auction',this)"><span class="ico">⚡</span>Аукцион</button>
+  <button class="nav-btn" onclick="go('shop',this)"><span class="ico">🛒</span>Магазин</button>
+  <button class="nav-btn" onclick="go('profile',this)"><span class="ico">👤</span>Профиль</button>
+  <button class="nav-btn" onclick="go('top',this)"><span class="ico">🏆</span>Топ</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const WS_URL = 'wss://uc-auction-backend-production.up.railway.app';
+const BOT = 'UCBidbot';
+const MAX_DISCOUNT = 15000;
+const MAX_TIME = 30;
+
+const tg = window.Telegram?.WebApp;
+let tgUser = { id: 'g_' + Math.random().toString(36).slice(2,8), first_name: 'Гость', username: '' };
+if (tg) { tg.ready(); tg.expand(); const u = tg.initDataUnsafe?.user; if (u) tgUser = u; }
+
+document.getElementById('pName').textContent = tgUser.first_name + (tgUser.last_name ? ' ' + tgUser.last_name : '');
+document.getElementById('pId').textContent = tgUser.username ? '@' + tgUser.username : 'ID: ' + tgUser.id;
+document.getElementById('pAvatar').textContent = (tgUser.first_name || 'G')[0].toUpperCase();
+
+let state = {
+  coins: 0, wins: 0, ucWon: 0, ucPending: 0, ucWithdrawn: 0,
+  winHistory: [], myAuctionCoins: 0, level: 1, levelTitle: '🌱 Новичок',
+  xp: 0, nextXp: 100, referralCode: '', referrals: 0,
+  auctionActive: false, timeLeft: MAX_TIME, leaderId: null, auctionData: null,
+  voteSession: null, myVote: null
+};
+let bidFeed = [];
+let ws = null;
+let reconnTimer = null;
+let nextInterval = null;
+let voteCountdownInterval = null;
+
+function connect() {
+  if (ws && ws.readyState < 2) return;
+  setConn('loading');
+  try { ws = new WebSocket(WS_URL); } catch(e) { schedReconn(); return; }
+  ws.onopen = () => {
+    setConn('ok');
+    clearTimeout(reconnTimer);
+    ws.send(JSON.stringify({ type: 'JOIN', telegramId: String(tgUser.id), name: tgUser.first_name || 'Гость' }));
+    setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'PING' })); }, 20000);
+  };
+  ws.onmessage = e => { try { handle(JSON.parse(e.data)); } catch(x) {} };
+  ws.onclose = () => { setConn('loading'); schedReconn(); };
+  ws.onerror = () => schedReconn();
+}
+
+function schedReconn() { clearTimeout(reconnTimer); reconnTimer = setTimeout(connect, 3000); }
+
+function handle(msg) {
+  switch(msg.type) {
+    case 'CONNECTED':
+    case 'JOINED':
+      if (msg.auction) applyAuction(msg.auction);
+      if (msg.user) applyUser(msg.user);
+      if (msg.leaderboard) renderLb(msg.leaderboard);
+      break;
+    case 'TIMER':
+      state.timeLeft = msg.timeLeft;
+      updateTimer();
+      break;
+    case 'TIMER_RESET':
+      state.timeLeft = msg.timeLeft || MAX_TIME;
+      updateTimer();
+      break;
+    case 'BID_PLACED':
+      state.timeLeft = msg.timeLeft;
+      state.leaderId = msg.leaderId;
+      updateStats(msg.currentPrice, msg.bidCount, msg.leaderName, msg.leaderId === String(tgUser.id));
+      addFeed(msg.bid, msg.leaderId === String(tgUser.id));
+      updateTimer();
+      break;
+    case 'BID_CONFIRMED':
+      state.coins = msg.coinsLeft;
+      state.myAuctionCoins = msg.myAuctionCoins;
+      updateCoins();
+      flashBtn();
+      break;
+    case 'VOTE_STARTED':
+      state.voteSession = { id: msg.voteId, votes: {}, totalVotes: 0, required: msg.required };
+      state.myVote = null;
+      renderVote();
+      break;
+    case 'VOTE_UPDATE':
+      if (state.voteSession) {
+        state.voteSession.votes = msg.votes;
+        state.voteSession.totalVotes = msg.totalVotes;
+        renderVoteUpdate();
+      }
+      break;
+    case 'VOTE_WON':
+      if (state.voteSession) {
+        state.voteSession.countdownEnd = msg.countdownEnd;
+        state.voteSession.winnerLot = msg.prize;
+        startVoteCountdown(msg.countdownEnd);
+      }
+      toast(`🏁 ${msg.prize} победил! Аукцион через ${Math.floor(msg.startsIn/60)} мин!`, 'ok');
+      break;
+    case 'AUCTION_SOON':
+      toast(`⚡ ${msg.prize} начнётся через 5 минут!`, 'ok');
+      break;
+    case 'VOTE_RESULT':
+      if (msg.ok) { state.myVote = true; toast('✅ Голос принят!', 'ok'); renderVoteUpdate(); }
+      else toast('❌ ' + msg.error, 'err');
+      break;
+    case 'NEW_AUCTION':
+      state.voteSession = null; state.myVote = null; state.myAuctionCoins = 0;
+      bidFeed = []; clearNextCountdown(); clearVoteCountdown();
+      if (msg.auction) applyAuction(msg.auction);
+      toast('🆕 Аукцион начался!', 'ok');
+      break;
+    case 'AUCTION_ENDED':
+      state.auctionActive = false;
+      showResult(msg);
+      startNextCountdown();
+      if (msg.leaderboard) renderLb(msg.leaderboard);
+      break;
+    case 'COINS_ADDED':
+      state.coins = msg.totalCoins;
+      updateCoins();
+      toast(`✅ +${msg.amount} коинов!`, 'ok');
+      break;
+    case 'UC_WITHDRAWN':
+      state.ucPending = msg.ucPending; state.ucWithdrawn = msg.ucWithdrawn;
+      renderUCStats();
+      toast(`✅ ${msg.uc} UC выдано!`, 'ok');
+      break;
+    case 'BUY_REQUEST_SENT':
+      toast('📤 Заявка отправлена! Открой бота.', 'ok');
+      break;
+    case 'ERROR':
+      toast('❌ ' + msg.message, 'err');
+      break;
+  }
+}
+
+function applyAuction(a) {
+  state.auctionActive = a.active;
+  state.auctionData = a;
+  state.timeLeft = a.timeLeft || MAX_TIME;
+  state.leaderId = a.leaderId;
+  state.myAuctionCoins = a.myAuctionCoins || 0;
+  if (a.voteSession) { state.voteSession = a.voteSession; renderVote(); }
+  else if (!a.active || a.waiting) renderWaiting();
+  else { renderAuction(a); if (a.bidHistory) { bidFeed = []; [...a.bidHistory].reverse().forEach(b => addFeed(b, b.userId === String(tgUser.id))); } }
+}
+
+function applyUser(u) {
+  state.coins = u.coins || 0;
+  state.wins = u.wins || 0;
+  state.ucWon = u.ucWon || 0;
+  state.ucPending = u.ucPending || 0;
+  state.ucWithdrawn = u.ucWithdrawn || 0;
+  state.winHistory = u.winHistory || [];
+  state.myAuctionCoins = u.myAuctionCoins || 0;
+  state.level = u.level || 1;
+  state.levelTitle = u.levelTitle || '🌱 Новичок';
+  state.xp = u.xp || 0;
+  state.nextXp = u.nextXp || 100;
+  state.referralCode = u.referralCode || '';
+  state.referrals = u.referrals || 0;
+  updateCoins();
+  renderProfile();
+}
+
+function renderWaiting() {
+  document.getElementById('auctionContent').innerHTML = `
+    <div class="waiting">
+      <div class="ico">⏳</div>
+      <h2>Ожидаем голосования</h2>
+      <p>Скоро откроется голосование за следующий лот.<br>Следи за уведомлениями в канале.</p>
+    </div>`;
+}
+
+function renderVote() {
+  const vs = state.voteSession;
+  if (!vs) return;
+  const lots = { '325': '💙 325 UC', '660': '💎 660 UC', '1800': '👑 1800 UC' };
+  const btns = Object.entries(lots).map(([k, label]) => {
+    const votes = vs.votes?.[k] || 0;
+    const pct = vs.totalVotes > 0 ? Math.round(votes / vs.totalVotes * 100) : 0;
+    const voted = state.myVote && vs.myVoteKey === k;
+    return `<button class="vote-btn ${voted ? 'voted' : ''}" onclick="vote('${k}')">
+      <span>${label} ${voted ? '✅' : ''}</span>
+      <span style="color:var(--accent2)">${votes} гол.</span>
+    </button>
+    <div class="vote-bar"><div class="vote-fill" style="width:${pct}%"></div></div>`;
+  }).join('');
+
+  document.getElementById('auctionContent').innerHTML = `
+    <div class="vote-card">
+      <div class="vote-title">🗳 Голосование за лот!</div>
+      <div class="vote-sub">Набери ${vs.required} голосов — и аукцион стартует через 5 минут!</div>
+      ${btns}
+      <div class="vote-progress">Всего голосов: <b>${vs.totalVotes || 0}</b> / ${vs.required}</div>
+      ${vs.countdownEnd ? `<div class="vote-countdown" id="voteCountdown">Запуск...</div>` : ''}
+    </div>`;
+
+  if (vs.countdownEnd) startVoteCountdown(vs.countdownEnd);
+}
+
+function renderVoteUpdate() {
+  const vs = state.voteSession;
+  if (!vs) return;
+  const lots = { '325': '💙 325 UC', '660': '💎 660 UC', '1800': '👑 1800 UC' };
+  Object.keys(lots).forEach((k, i) => {
+    const btns = document.querySelectorAll('.vote-btn');
+    const bars = document.querySelectorAll('.vote-fill');
+    const votes = vs.votes?.[k] || 0;
+    const pct = vs.totalVotes > 0 ? Math.round(votes / vs.totalVotes * 100) : 0;
+    if (btns[i]) { const sp = btns[i].querySelectorAll('span'); if (sp[1]) sp[1].textContent = votes + ' гол.'; }
+    if (bars[i]) bars[i].style.width = pct + '%';
+  });
+  const prog = document.querySelector('.vote-progress');
+  if (prog) prog.innerHTML = `Всего голосов: <b>${vs.totalVotes || 0}</b> / ${vs.required}`;
+}
+
+function startVoteCountdown(endTime) {
+  clearVoteCountdown();
+  voteCountdownInterval = setInterval(() => {
+    const sec = Math.max(0, Math.round((endTime - Date.now()) / 1000));
+    const el = document.getElementById('voteCountdown');
+    if (el) {
+      const m = Math.floor(sec / 60), s = sec % 60;
+      el.textContent = `🚀 Запуск через ${m}:${String(s).padStart(2,'0')}`;
+    }
+    if (sec <= 0) clearVoteCountdown();
+  }, 1000);
+}
+
+function clearVoteCountdown() { clearInterval(voteCountdownInterval); }
+
+function vote(lotKey) {
+  if (!ws || ws.readyState !== 1) { toast('❌ Нет подключения', 'err'); return; }
+  if (state.myVote) { toast('Ты уже проголосовал!', 'err'); return; }
+  state.voteSession.myVoteKey = lotKey;
+  ws.send(JSON.stringify({ type: 'VOTE', telegramId: String(tgUser.id), lotKey }));
+}
+
+function renderAuction(a) {
+  const isLeader = a.leaderId === String(tgUser.id);
+  const icon = a.uc >= 1800 ? '👑' : a.uc >= 660 ? '💎' : '💙';
+  document.getElementById('auctionContent').innerHTML = `
+    <div class="lot-card">
+      <div class="lot-header">
+        <div class="lot-icon">${icon}</div>
+        <div><div class="lot-title">${a.prize}</div><div class="lot-sub">PUBG Mobile · Unknown Cash</div></div>
+      </div>
+      <div class="lot-body">
+        <div class="stats-row">
+          <div class="stat"><div class="stat-l">Цена</div><div class="stat-v gold" id="curPrice">${(a.currentPrice||100).toLocaleString('ru-RU')} сум</div></div>
+          <div class="stat"><div class="stat-l">Ставок</div><div class="stat-v" id="bidCount">${a.bidCount||0}</div></div>
+          <div class="stat"><div class="stat-l">Лидер</div><div class="stat-v green" id="curLeader" style="font-size:12px">${isLeader?'🟢 Ты':(a.leaderName||'—')}</div></div>
+        </div>
+        <div class="timer-box">
+          <div style="flex:1">
+            <div style="font-size:11px;color:var(--muted)">До конца</div>
+            <div class="timer-num${state.timeLeft<=10?' urgent':''}" id="timerNum">${state.timeLeft}</div>
+            <div class="timer-bar"><div class="timer-fill" id="timerFill" style="width:${state.timeLeft/MAX_TIME*100}%"></div></div>
+          </div>
+          <div class="timer-r">
+            <div class="lbl">Рыночная цена</div>
+            <div class="price">${(a.marketPrice||0).toLocaleString('ru-RU')} сум</div>
+            <div class="cost">1 ставка = 1 🪙 = 500 сум</div>
+          </div>
+        </div>
+        <button class="bid-btn" id="bidBtn" onclick="placeBid()">⚡ Поставить ставку <span class="coin-badge">1 🪙</span></button>
+        <div class="feed" id="bidFeed"></div>
+      </div>
+    </div>`;
+  renderFeed();
+}
+
+function showResult(msg) {
+  const isWinner = msg.winnerId === String(tgUser.id);
+  let html = '';
+  if (isWinner) {
+    html = `<div class="result-win"><div class="ico">🏆</div><h3>Вы победили!</h3><p>Приз: <strong>${msg.prize}</strong><br>Итоговая цена: <strong>${(msg.finalPrice||0).toLocaleString('ru-RU')} сум</strong><br><br>Зайдите в бота и введите PUBG ID.</p></div>`;
+  } else if (state.myAuctionCoins > 0) {
+    const fp = (msg.marketPrice||96000) - MAX_DISCOUNT;
+    html = `<div class="result-lose">
+      <div class="top"><div style="font-size:36px">🎁</div><div><h3>Специальное предложение!</h3></div></div>
+      <p>Спасибо за участие!</p>
+      <div class="discount-num">Скидка 15,000 сум</div>
+      <p>Купи <strong>${msg.prize}</strong> за <strong>${fp.toLocaleString('ru-RU')} сум</strong> вместо ${(msg.marketPrice||0).toLocaleString('ru-RU')} сум.</p>
+      <button class="discount-btn" onclick="openDiscount('${msg.prize}')">Получить скидку — ${fp.toLocaleString('ru-RU')} сум</button>
+    </div>`;
+  } else {
+    html = `<div class="result-lose" style="text-align:center"><h3>Аукцион завершён</h3><p style="margin-top:8px">Победитель: <strong>${msg.winnerName||'—'}</strong></p></div>`;
+  }
+  const content = document.getElementById('auctionContent');
+  if (content) content.innerHTML = html + `<div id="nextBox" style="display:none" class="next-box"><div class="next-lbl">Следующий аукцион</div><div class="next-num" id="nextNum">—</div></div>`;
+  const btn = document.getElementById('bidBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '🔴 Аукцион завершён'; btn.style.background = 'var(--surface2)'; }
+}
+
+function startNextCountdown() {
+  clearNextCountdown();
+  let t = 60;
+  const box = document.getElementById('nextBox');
+  if (box) box.style.display = 'block';
+  nextInterval = setInterval(() => {
+    t--;
+    const el = document.getElementById('nextNum');
+    if (el) el.textContent = `Голосование через ${Math.max(0,t)} сек`;
+    if (t <= 0) clearNextCountdown();
+  }, 1000);
+}
+
+function clearNextCountdown() { clearInterval(nextInterval); const b = document.getElementById('nextBox'); if (b) b.style.display = 'none'; }
+
+function updateStats(price, count, leaderName, isMe) {
+  const el = id => document.getElementById(id);
+  if (el('curPrice')) el('curPrice').textContent = price.toLocaleString('ru-RU') + ' сум';
+  if (el('bidCount')) el('bidCount').textContent = count;
+  if (el('curLeader')) el('curLeader').textContent = isMe ? '🟢 Ты' : (leaderName||'—');
+}
+
+function updateTimer() {
+  const t = state.timeLeft;
+  const n = document.getElementById('timerNum');
+  const f = document.getElementById('timerFill');
+  if (n) { n.textContent = t; n.className = 'timer-num' + (t<=10?' urgent':''); }
+  if (f) f.style.width = Math.max(0, t/MAX_TIME*100) + '%';
+}
+
+function addFeed(bid, isMe) {
+  bidFeed.unshift({...bid, isMe});
+  if (bidFeed.length > 10) bidFeed.pop();
+  renderFeed();
+}
+
+function renderFeed() {
+  const el = document.getElementById('bidFeed');
+  if (!el) return;
+  const colors = ['#7c3aed','#2563eb','#059669','#dc2626','#d97706'];
+  el.innerHTML = bidFeed.map(b => {
+    const color = b.isMe ? '#10b981' : colors[(b.name||'').charCodeAt(0)%colors.length];
+    return `<div class="feed-item"><div class="feed-av" style="background:${color}">${(b.name||'?')[0]}</div><div class="feed-name">${b.isMe?'🟢 Ты':b.name}</div><div class="feed-price">${Number(b.price).toLocaleString('ru-RU')} сум</div><div class="feed-time">${b.time||''}</div></div>`;
+  }).join('');
+}
+
+function flashBtn() {
+  const btn = document.getElementById('bidBtn');
+  if (!btn) return;
+  btn.classList.add('ok'); btn.textContent = '✅ Ставка принята!';
+  setTimeout(() => { btn.classList.remove('ok'); btn.innerHTML = '⚡ Поставить ставку <span class="coin-badge">1 🪙</span>'; }, 800);
+}
+
+function updateCoins() {
+  document.getElementById('coinCount').textContent = state.coins + ' 🪙';
+}
+
+function renderProfile() {
+  document.getElementById('pLevel').textContent = state.levelTitle;
+  document.getElementById('navLevel').textContent = 'Lv' + state.level;
+  document.getElementById('xpTitle').textContent = state.levelTitle;
+  document.getElementById('xpNums').textContent = state.xp + ' / ' + (state.nextXp || '∞') + ' XP';
+  const pct = state.nextXp ? Math.min(100, Math.round(state.xp / state.nextXp * 100)) : 100;
+  document.getElementById('xpFill').style.width = pct + '%';
+  const refLink = `https://t.me/${BOT}?start=ref_${state.referralCode}`;
+  document.getElementById('refLink').textContent = refLink;
+  document.getElementById('refCount').textContent = state.referrals;
+  renderUCStats();
+  renderWinHistory();
+}
+
+function renderUCStats() {
+  document.getElementById('ucWon').textContent = state.ucWon;
+  document.getElementById('ucPending').textContent = state.ucPending;
+  document.getElementById('ucWithdrawn').textContent = state.ucWithdrawn;
+}
+
+function renderWinHistory() {
+  const el = document.getElementById('winHistory');
+  if (!el) return;
+  if (!state.winHistory.length) { el.innerHTML = '<div class="empty"><div class="ico">🏆</div><div>Побед пока нет</div></div>'; return; }
+  el.innerHTML = state.winHistory.map(w => `
+    <div class="win-item">
+      <div class="win-ico">${w.uc>=1800?'👑':w.uc>=660?'💎':'💙'}</div>
+      <div class="win-info">
+        <div class="win-title">${w.prize}</div>
+        <div class="win-date">${w.date}</div>
+        <span class="win-status ${w.status==='pending'?'s-pending':'s-done'}">${w.status==='pending'?'⏳ Ожидает':'✅ Получено'}</span>
+      </div>
+      <div class="win-price">${(w.finalPrice||0).toLocaleString('ru-RU')} сум</div>
+    </div>`).join('');
+}
+
+function renderLb(lb) {
+  const el = document.getElementById('lbList');
+  if (!el) return;
+  if (!lb?.length) { el.innerHTML = '<div class="empty"><div class="ico">🏆</div><div>Пока нет победителей</div></div>'; return; }
+  el.innerHTML = lb.map((u, i) => {
+    const cls = i===0?'g':i===1?'s':i===2?'b':'o';
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1);
+    return `<div class="lb-item"><div class="lb-rank ${cls}">${medal}</div><div><div class="lb-name">${u.name}</div><div class="lb-sub">Уровень ${u.level||1}</div></div><div class="lb-uc"><div class="num">${u.ucWon} UC</div><div style="font-size:11px;color:var(--muted)">${u.wins} побед</div></div></div>`;
+  }).join('');
+}
+
+function placeBid() {
+  if (!state.auctionActive) { toast('Аукцион не активен', 'err'); return; }
+  if (!ws || ws.readyState !== 1) { toast('❌ Нет подключения', 'err'); return; }
+  if (state.coins <= 0) { toast('❌ Нет коинов!', 'err'); go('shop', document.querySelectorAll('.nav-btn')[1]); return; }
+  ws.send(JSON.stringify({ type: 'BID', telegramId: String(tgUser.id), name: tgUser.first_name || 'Гость' }));
+}
+
+function buyCoins(count, price) {
+  if (!ws || ws.readyState !== 1) { toast('❌ Нет подключения', 'err'); return; }
+  ws.send(JSON.stringify({ type: 'BUY_REQUEST', telegramId: String(tgUser.id), name: tgUser.first_name||'Гость', username: tgUser.username||'', count, price }));
+  toast('📤 Заявка отправлена! Открой бота.', 'ok');
+  if (tg) tg.openTelegramLink(`https://t.me/${BOT}?start=buy_${count}`);
+}
+
+function openDiscount(prize) {
+  if (tg) tg.openTelegramLink(`https://t.me/${BOT}?start=discount`);
+  else toast('Напиши боту @' + BOT, 'ok');
+}
+
+function copyRef() {
+  const link = `https://t.me/${BOT}?start=ref_${state.referralCode}`;
+  if (navigator.clipboard) { navigator.clipboard.writeText(link).then(() => toast('✅ Ссылка скопирована!', 'ok')); }
+  else { toast('Ссылка: ' + link, 'ok'); }
+}
+
+function go(page, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  btn.classList.add('active');
+  if (page === 'profile') renderProfile();
+}
+
+function setConn(s) {
+  const bar = document.getElementById('connBar');
+  if (s === 'loading') { bar.textContent = '🔄 Подключение...'; bar.className = 'conn-bar show'; }
+  else { bar.textContent = '✅ Подключено'; bar.className = 'conn-bar show ok'; setTimeout(() => bar.classList.remove('show'), 2000); }
+}
+
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show ' + (type||'');
+  clearTimeout(t._t); t._t = setTimeout(() => t.className = 'toast', 2500);
+}
+
+function acceptTerms() {
+  document.getElementById('termsModal').style.display = 'none';
+  sessionStorage.setItem('terms_ok', '1');
+}
+
+function checkTerms() {
+  if (!sessionStorage.getItem('terms_ok')) document.getElementById('termsModal').style.display = 'flex';
+  else document.getElementById('termsModal').style.display = 'none';
+}
+
+connect();
+checkTerms();
+</script>
+</body>
+</html>
