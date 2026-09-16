@@ -202,11 +202,11 @@ html,body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:va
     <div class="modal-icon">⚡</div>
     <div class="modal-title">UC Auction</div>
     <div class="modal-text">
-      Перед использованием:\n\n
-      🪙 <b>Коины невозвратны</b> — использованные ставки не возвращаются\n\n
-      🏆 <b>Победитель</b> — последний поставивший ставку до истечения таймера\n\n
-      🎁 <b>Скидка 15,000 сум</b> — для участников проигравшего аукциона\n\n
-      🗳 <b>Голосование</b> — игроки выбирают следующий лот\n\n
+      Перед использованием:<br><br>
+      🪙 <b>Коины невозвратны</b> — использованные ставки не возвращаются<br><br>
+      🏆 <b>Победитель</b> — последний поставивший ставку до истечения таймера<br><br>
+      🎁 <b>Скидка 15,000 сум</b> — для участников проигравшего аукциона<br><br>
+      🗳 <b>Голосование</b> — игроки выбирают следующий лот<br><br>
       ⚠️ <b>Администрация</b> оставляет право аннулировать результаты при нарушениях
     </div>
     <button class="modal-btn" onclick="acceptTerms()">✅ Принимаю условия</button>
@@ -308,6 +308,13 @@ const MAX_TIME = 30;
 const tg = window.Telegram?.WebApp;
 let tgUser = { id: 'g_' + Math.random().toString(36).slice(2,8), first_name: 'Гость', username: '' };
 if (tg) { tg.ready(); tg.expand(); const u = tg.initDataUnsafe?.user; if (u) tgUser = u; }
+const tgInitData = tg?.initData || '';
+
+// Names come from Telegram profiles and are fully user-controlled — never trust
+// them as HTML when rendering into innerHTML.
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
 
 document.getElementById('pName').textContent = tgUser.first_name + (tgUser.last_name ? ' ' + tgUser.last_name : '');
 document.getElementById('pId').textContent = tgUser.username ? '@' + tgUser.username : 'ID: ' + tgUser.id;
@@ -333,7 +340,7 @@ function connect() {
   ws.onopen = () => {
     setConn('ok');
     clearTimeout(reconnTimer);
-    ws.send(JSON.stringify({ type: 'JOIN', telegramId: String(tgUser.id), name: tgUser.first_name || 'Гость' }));
+    ws.send(JSON.stringify({ type: 'JOIN', telegramId: String(tgUser.id), name: tgUser.first_name || 'Гость', initData: tgInitData }));
     setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'PING' })); }, 20000);
   };
   ws.onmessage = e => { try { handle(JSON.parse(e.data)); } catch(x) {} };
@@ -373,7 +380,7 @@ function handle(msg) {
       flashBtn();
       break;
     case 'VOTE_STARTED':
-      state.voteSession = { id: msg.voteId, votes: {}, totalVotes: 0, required: msg.required };
+      state.voteSession = { id: msg.voteId, votes: {}, totalVotes: 0, required: msg.required, lots: msg.lots || [] };
       state.myVote = null;
       renderVote();
       break;
@@ -471,13 +478,16 @@ function renderWaiting() {
 function renderVote() {
   const vs = state.voteSession;
   if (!vs) return;
-  const lots = { '325': '💙 325 UC', '660': '💎 660 UC', '1800': '👑 1800 UC' };
-  const btns = Object.entries(lots).map(([k, label]) => {
+  const lots = vs.lots || [];
+  const btns = lots.map(lot => {
+    const k = lot.lotKey;
+    const prizeLabel = (lot.text || '').replace(/\s*\(\d+\s*голосов\)$/i, '') || k;
+    const icon = Number(k) >= 1800 ? '👑' : Number(k) >= 660 ? '💎' : '💙';
     const votes = vs.votes?.[k] || 0;
     const pct = vs.totalVotes > 0 ? Math.round(votes / vs.totalVotes * 100) : 0;
     const voted = state.myVote && vs.myVoteKey === k;
     return `<button class="vote-btn ${voted ? 'voted' : ''}" onclick="vote('${k}')">
-      <span>${label} ${voted ? '✅' : ''}</span>
+      <span>${icon} ${escapeHtml(prizeLabel)} ${voted ? '✅' : ''}</span>
       <span style="color:var(--accent2)">${votes} гол.</span>
     </button>
     <div class="vote-bar"><div class="vote-fill" style="width:${pct}%"></div></div>`;
@@ -498,11 +508,11 @@ function renderVote() {
 function renderVoteUpdate() {
   const vs = state.voteSession;
   if (!vs) return;
-  const lots = { '325': '💙 325 UC', '660': '💎 660 UC', '1800': '👑 1800 UC' };
-  Object.keys(lots).forEach((k, i) => {
+  const lots = vs.lots || [];
+  lots.forEach((lot, i) => {
     const btns = document.querySelectorAll('.vote-btn');
     const bars = document.querySelectorAll('.vote-fill');
-    const votes = vs.votes?.[k] || 0;
+    const votes = vs.votes?.[lot.lotKey] || 0;
     const pct = vs.totalVotes > 0 ? Math.round(votes / vs.totalVotes * 100) : 0;
     if (btns[i]) { const sp = btns[i].querySelectorAll('span'); if (sp[1]) sp[1].textContent = votes + ' гол.'; }
     if (bars[i]) bars[i].style.width = pct + '%';
@@ -546,7 +556,7 @@ function renderAuction(a) {
         <div class="stats-row">
           <div class="stat"><div class="stat-l">Цена</div><div class="stat-v gold" id="curPrice">${(a.currentPrice||100).toLocaleString('ru-RU')} сум</div></div>
           <div class="stat"><div class="stat-l">Ставок</div><div class="stat-v" id="bidCount">${a.bidCount||0}</div></div>
-          <div class="stat"><div class="stat-l">Лидер</div><div class="stat-v green" id="curLeader" style="font-size:12px">${isLeader?'🟢 Ты':(a.leaderName||'—')}</div></div>
+          <div class="stat"><div class="stat-l">Лидер</div><div class="stat-v green" id="curLeader" style="font-size:12px">${isLeader?'🟢 Ты':escapeHtml(a.leaderName||'—')}</div></div>
         </div>
         <div class="timer-box">
           <div style="flex:1">
@@ -557,10 +567,10 @@ function renderAuction(a) {
           <div class="timer-r">
             <div class="lbl">Рыночная цена</div>
             <div class="price">${(a.marketPrice||0).toLocaleString('ru-RU')} сум</div>
-            <div class="cost">1 ставка = 1 🪙 = 500 сум</div>
+            <div class="cost">1 ставка = ${a.bidCoins||1} 🪙 = ${((a.bidCoins||1)*(a.coinCost||500)).toLocaleString('ru-RU')} сум</div>
           </div>
         </div>
-        <button class="bid-btn" id="bidBtn" onclick="placeBid()">⚡ Поставить ставку <span class="coin-badge">1 🪙</span></button>
+        <button class="bid-btn" id="bidBtn" onclick="placeBid()">⚡ Поставить ставку <span class="coin-badge">${a.bidCoins||1} 🪙</span></button>
         <div class="feed" id="bidFeed"></div>
       </div>
     </div>`;
@@ -582,7 +592,7 @@ function showResult(msg) {
       <button class="discount-btn" onclick="openDiscount('${msg.prize}')">Получить скидку — ${fp.toLocaleString('ru-RU')} сум</button>
     </div>`;
   } else {
-    html = `<div class="result-lose" style="text-align:center"><h3>Аукцион завершён</h3><p style="margin-top:8px">Победитель: <strong>${msg.winnerName||'—'}</strong></p></div>`;
+    html = `<div class="result-lose" style="text-align:center"><h3>Аукцион завершён</h3><p style="margin-top:8px">Победитель: <strong>${escapeHtml(msg.winnerName||'—')}</strong></p></div>`;
   }
   const content = document.getElementById('auctionContent');
   if (content) content.innerHTML = html + `<div id="nextBox" style="display:none" class="next-box"><div class="next-lbl">Следующий аукцион</div><div class="next-num" id="nextNum">—</div></div>`;
@@ -609,7 +619,7 @@ function updateStats(price, count, leaderName, isMe) {
   const el = id => document.getElementById(id);
   if (el('curPrice')) el('curPrice').textContent = price.toLocaleString('ru-RU') + ' сум';
   if (el('bidCount')) el('bidCount').textContent = count;
-  if (el('curLeader')) el('curLeader').textContent = isMe ? '🟢 Ты' : (leaderName||'—');
+  if (el('curLeader')) el('curLeader').textContent = isMe ? '🟢 Ты' : (leaderName||'—'); // textContent — no escaping needed
 }
 
 function updateTimer() {
@@ -632,15 +642,16 @@ function renderFeed() {
   const colors = ['#7c3aed','#2563eb','#059669','#dc2626','#d97706'];
   el.innerHTML = bidFeed.map(b => {
     const color = b.isMe ? '#10b981' : colors[(b.name||'').charCodeAt(0)%colors.length];
-    return `<div class="feed-item"><div class="feed-av" style="background:${color}">${(b.name||'?')[0]}</div><div class="feed-name">${b.isMe?'🟢 Ты':b.name}</div><div class="feed-price">${Number(b.price).toLocaleString('ru-RU')} сум</div><div class="feed-time">${b.time||''}</div></div>`;
+    return `<div class="feed-item"><div class="feed-av" style="background:${color}">${escapeHtml((b.name||'?')[0])}</div><div class="feed-name">${b.isMe?'🟢 Ты':escapeHtml(b.name)}</div><div class="feed-price">${Number(b.price).toLocaleString('ru-RU')} сум</div><div class="feed-time">${escapeHtml(b.time||'')}</div></div>`;
   }).join('');
 }
 
 function flashBtn() {
   const btn = document.getElementById('bidBtn');
   if (!btn) return;
+  const bidCoins = state.auctionData?.bidCoins || 1;
   btn.classList.add('ok'); btn.textContent = '✅ Ставка принята!';
-  setTimeout(() => { btn.classList.remove('ok'); btn.innerHTML = '⚡ Поставить ставку <span class="coin-badge">1 🪙</span>'; }, 800);
+  setTimeout(() => { btn.classList.remove('ok'); btn.innerHTML = `⚡ Поставить ставку <span class="coin-badge">${bidCoins} 🪙</span>`; }, 800);
 }
 
 function updateCoins() {
@@ -690,7 +701,7 @@ function renderLb(lb) {
   el.innerHTML = lb.map((u, i) => {
     const cls = i===0?'g':i===1?'s':i===2?'b':'o';
     const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1);
-    return `<div class="lb-item"><div class="lb-rank ${cls}">${medal}</div><div><div class="lb-name">${u.name}</div><div class="lb-sub">Уровень ${u.level||1}</div></div><div class="lb-uc"><div class="num">${u.ucWon} UC</div><div style="font-size:11px;color:var(--muted)">${u.wins} побед</div></div></div>`;
+    return `<div class="lb-item"><div class="lb-rank ${cls}">${medal}</div><div><div class="lb-name">${escapeHtml(u.name)}</div><div class="lb-sub">Уровень ${u.level||1}</div></div><div class="lb-uc"><div class="num">${u.ucWon} UC</div><div style="font-size:11px;color:var(--muted)">${u.wins} побед</div></div></div>`;
   }).join('');
 }
 
