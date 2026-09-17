@@ -231,19 +231,9 @@ html,body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:va
 <!-- SHOP PAGE -->
 <div class="page" id="page-shop">
   <div class="sec-label">Пакеты коинов</div>
-  <div class="pack-grid">
-    <div class="pack" onclick="buyCoins(10,5000)"><div class="pack-n">10</div><div class="pack-s">коинов</div><div class="pack-p">5,000 сум</div><div class="pack-per">500 сум/коин</div><button class="pack-btn">Купить</button></div>
-    <div class="pack hot" onclick="buyCoins(30,15000)"><div class="pack-n">30</div><div class="pack-s">коинов</div><div class="pack-p">15,000 сум</div><div class="pack-per">500 сум/коин</div><button class="pack-btn">Купить</button></div>
-    <div class="pack" onclick="buyCoins(60,30000)"><div class="pack-n">60</div><div class="pack-s">коинов</div><div class="pack-p">30,000 сум</div><div class="pack-per">500 сум/коин</div><button class="pack-btn">Купить</button></div>
-    <div class="pack" onclick="buyCoins(100,50000)"><div class="pack-n">100</div><div class="pack-s">коинов</div><div class="pack-p">50,000 сум</div><div class="pack-per">500 сум/коин</div><button class="pack-btn">Купить</button></div>
-  </div>
+  <div class="pack-grid" id="packGrid"></div>
   <div class="sec-label">Прямая покупка UC</div>
-  <div class="uc-grid">
-    <div class="uc-item"><div class="uc-ico">💙</div><div class="uc-name">60 UC</div><div class="uc-price">10,000 сум</div></div>
-    <div class="uc-item"><div class="uc-ico">💜</div><div class="uc-name">325 UC</div><div class="uc-price">55,000 сум</div></div>
-    <div class="uc-item"><div class="uc-ico">💎</div><div class="uc-name">660 UC</div><div class="uc-price">96,000 сум</div></div>
-    <div class="uc-item"><div class="uc-ico">👑</div><div class="uc-name">1800 UC</div><div class="uc-price">245,000 сум</div></div>
-  </div>
+  <div class="uc-grid" id="ucGrid"></div>
 </div>
 
 <!-- PROFILE PAGE -->
@@ -301,9 +291,11 @@ html,body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:va
 
 <script>
 const WS_URL = 'wss://uc-auction-backend-production.up.railway.app';
+const API_URL = WS_URL.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
 const BOT = 'UCBidbot';
-const MAX_DISCOUNT = 15000;
+let MAX_DISCOUNT = 15000; // overwritten by /prices once loaded, matches the admin's live setting
 const MAX_TIME = 30;
+let prices = { lots: {}, direct: {}, coinCost: 500 };
 
 const tg = window.Telegram?.WebApp;
 let tgUser = { id: 'g_' + Math.random().toString(36).slice(2,8), first_name: 'Гость', username: '' };
@@ -720,8 +712,60 @@ function buyCoins(count, price) {
 }
 
 function openDiscount(prize) {
-  if (tg) tg.openTelegramLink(`https://t.me/${BOT}?start=discount`);
-  else toast('Напиши боту @' + BOT, 'ok');
+  try {
+    if (tg && tg.openTelegramLink) { tg.openTelegramLink(`https://t.me/${BOT}?start=discount`); return; }
+  } catch(e) {}
+  toast('Напиши боту @' + BOT + ': /start discount', 'ok');
+}
+
+function buyDirectUC(uc, price) {
+  try {
+    if (tg && tg.openTelegramLink) { tg.openTelegramLink(`https://t.me/${BOT}?start=buy_uc`); return; }
+  } catch(e) {}
+  toast('Напиши боту @' + BOT + ' → «Купить UC напрямую»', 'ok');
+}
+
+// Prices previously lived only as hardcoded numbers scattered across the
+// bots and this page, so an admin price change never actually reached the
+// shop. Now it's the one place that fetches the live numbers.
+async function loadPrices() {
+  try {
+    const res = await fetch(API_URL + '/prices');
+    const data = await res.json();
+    prices = {
+      lots: data.lots || {},
+      direct: data.direct || {},
+      coinCost: data.coinCost || 500
+    };
+    if (data.maxDiscount) MAX_DISCOUNT = data.maxDiscount;
+    renderShop();
+  } catch(e) {}
+}
+
+function renderShop() {
+  const packGrid = document.getElementById('packGrid');
+  if (packGrid) {
+    const sizes = [10, 30, 60, 100];
+    packGrid.innerHTML = sizes.map((count, i) => {
+      const price = count * (prices.coinCost || 500);
+      return `<div class="pack ${i===1?'hot':''}" onclick="buyCoins(${count},${price})">
+        <div class="pack-n">${count}</div><div class="pack-s">коинов</div>
+        <div class="pack-p">${price.toLocaleString('ru-RU')} сум</div>
+        <div class="pack-per">${prices.coinCost||500} сум/коин</div>
+        <button class="pack-btn">Купить</button>
+      </div>`;
+    }).join('');
+  }
+  const ucGrid = document.getElementById('ucGrid');
+  if (ucGrid) {
+    const icons = { uc60: '💙', uc325: '💜', uc660: '💎', uc1800: '👑' };
+    ucGrid.innerHTML = Object.entries(prices.direct).map(([id, item]) => `
+      <div class="uc-item" onclick="buyDirectUC(${item.uc},${item.price})">
+        <div class="uc-ico">${icons[id] || '💎'}</div>
+        <div class="uc-name">${item.uc} UC</div>
+        <div class="uc-price">${item.price.toLocaleString('ru-RU')} сум</div>
+      </div>`).join('');
+  }
 }
 
 function copyRef() {
@@ -761,6 +805,7 @@ function checkTerms() {
 }
 
 connect();
+loadPrices();
 checkTerms();
 </script>
 </body>
