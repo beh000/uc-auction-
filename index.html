@@ -322,6 +322,7 @@ let state = {
 let bidFeed = [];
 let ws = null;
 let reconnTimer = null;
+let pingInterval = null;
 let nextInterval = null;
 let voteCountdownInterval = null;
 
@@ -333,7 +334,8 @@ function connect() {
     setConn('ok');
     clearTimeout(reconnTimer);
     ws.send(JSON.stringify({ type: 'JOIN', telegramId: String(tgUser.id), name: tgUser.first_name || 'Гость', initData: tgInitData }));
-    setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'PING' })); }, 20000);
+    clearInterval(pingInterval); // each reconnect opened a new WS but never cleared the old ping loop, leaking one every time
+    pingInterval = setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'PING' })); }, 20000);
   };
   ws.onmessage = e => { try { handle(JSON.parse(e.data)); } catch(x) {} };
   ws.onclose = () => { setConn('loading'); schedReconn(); };
@@ -575,11 +577,11 @@ function showResult(msg) {
   if (isWinner) {
     html = `<div class="result-win"><div class="ico">🏆</div><h3>Вы победили!</h3><p>Приз: <strong>${msg.prize}</strong><br>Итоговая цена: <strong>${(msg.finalPrice||0).toLocaleString('ru-RU')} сум</strong><br><br>Зайдите в бота и введите PUBG ID.</p></div>`;
   } else if (state.myAuctionCoins > 0) {
-    const fp = (msg.marketPrice||96000) - MAX_DISCOUNT;
+    const fp = Math.max(0, (msg.marketPrice||96000) - MAX_DISCOUNT);
     html = `<div class="result-lose">
       <div class="top"><div style="font-size:36px">🎁</div><div><h3>Специальное предложение!</h3></div></div>
       <p>Спасибо за участие!</p>
-      <div class="discount-num">Скидка 15,000 сум</div>
+      <div class="discount-num">Скидка ${MAX_DISCOUNT.toLocaleString('ru-RU')} сум</div>
       <p>Купи <strong>${msg.prize}</strong> за <strong>${fp.toLocaleString('ru-RU')} сум</strong> вместо ${(msg.marketPrice||0).toLocaleString('ru-RU')} сум.</p>
       <button class="discount-btn" onclick="openDiscount('${msg.prize}')">Получить скидку — ${fp.toLocaleString('ru-RU')} сум</button>
     </div>`;
