@@ -292,7 +292,7 @@ html,body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:va
 <script>
 const WS_URL = 'wss://uc-auction-backend-production.up.railway.app';
 const API_URL = WS_URL.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
-const BOT = 'UCBidbot';
+let BOT = 'ucbid_uz_bot'; // overwritten by /prices once loaded, in case the bot is ever renamed
 let MAX_DISCOUNT = 15000; // overwritten by /prices once loaded, matches the admin's live setting
 const MAX_TIME = 30;
 let prices = { lots: {}, direct: {}, coinCost: 500 };
@@ -738,6 +738,7 @@ async function loadPrices() {
       coinCost: data.coinCost || 500
     };
     if (data.maxDiscount) MAX_DISCOUNT = data.maxDiscount;
+    if (data.botUsername) BOT = data.botUsername;
     renderShop();
   } catch(e) {}
 }
