@@ -205,7 +205,7 @@ html,body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:va
       Перед использованием:<br><br>
       🪙 <b>Коины невозвратны</b> — использованные ставки не возвращаются<br><br>
       🏆 <b>Победитель</b> — последний поставивший ставку до истечения таймера<br><br>
-      🎁 <b>Скидка 15,000 сум</b> — для участников проигравшего аукциона<br><br>
+      🎁 <b>Скидка <span id="termsDiscount">15,000</span> сум</b> — для участников проигравшего аукциона<br><br>
       🗳 <b>Голосование</b> — игроки выбирают следующий лот<br><br>
       ⚠️ <b>Администрация</b> оставляет право аннулировать результаты при нарушениях
     </div>
@@ -294,7 +294,11 @@ const WS_URL = 'wss://uc-auction-backend-production.up.railway.app';
 const API_URL = WS_URL.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
 let BOT = 'ucbid_uz_bot'; // overwritten by /prices once loaded, in case the bot is ever renamed
 let MAX_DISCOUNT = 15000; // overwritten by /prices once loaded, matches the admin's live setting
-const MAX_TIME = 30;
+// Mutable — the server sends the real per-auction max in `maxTime` (driven by
+// the admin's "Таймер аукциона" setting). Left as a hardcoded constant, the
+// countdown bar's width% (timeLeft/MAX_TIME) went wrong the moment an admin
+// changed that setting away from 30.
+let MAX_TIME = 30;
 let prices = { lots: {}, direct: {}, coinCost: 500 };
 
 const tg = window.Telegram?.WebApp;
@@ -374,7 +378,7 @@ function handle(msg) {
       flashBtn();
       break;
     case 'VOTE_STARTED':
-      state.voteSession = { id: msg.voteId, votes: {}, totalVotes: 0, required: msg.required, lots: msg.lots || [] };
+      state.voteSession = { id: msg.voteId, votes: {}, totalVotes: 0, required: msg.required, lots: msg.lots || [], startDelay: msg.startDelay ?? 300 };
       state.myVote = null;
       renderVote();
       break;
@@ -434,6 +438,7 @@ function handle(msg) {
 function applyAuction(a) {
   state.auctionActive = a.active;
   state.auctionData = a;
+  if (a.maxTime) MAX_TIME = a.maxTime;
   state.timeLeft = a.timeLeft || MAX_TIME;
   state.leaderId = a.leaderId;
   state.myAuctionCoins = a.myAuctionCoins || 0;
@@ -490,7 +495,7 @@ function renderVote() {
   document.getElementById('auctionContent').innerHTML = `
     <div class="vote-card">
       <div class="vote-title">🗳 Голосование за лот!</div>
-      <div class="vote-sub">Набери ${vs.required} голосов — и аукцион стартует через 5 минут!</div>
+      <div class="vote-sub">Набери ${vs.required} голосов — и аукцион стартует через ${Math.round((vs.startDelay ?? 300) / 60)} мин!</div>
       ${btns}
       <div class="vote-progress">Всего голосов: <b>${vs.totalVotes || 0}</b> / ${vs.required}</div>
       ${vs.countdownEnd ? `<div class="vote-countdown" id="voteCountdown">Запуск...</div>` : ''}
@@ -739,8 +744,10 @@ async function loadPrices() {
       direct: data.direct || {},
       coinCost: data.coinCost || 500
     };
-    if (data.maxDiscount) MAX_DISCOUNT = data.maxDiscount;
+    if (typeof data.maxDiscount === 'number') MAX_DISCOUNT = data.maxDiscount; // 0 is a valid "discount disabled" value, not "unset"
     if (data.botUsername) BOT = data.botUsername;
+    const termsDiscountEl = document.getElementById('termsDiscount');
+    if (termsDiscountEl) termsDiscountEl.textContent = MAX_DISCOUNT.toLocaleString('ru-RU');
     renderShop();
   } catch(e) {}
 }
