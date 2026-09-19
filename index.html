@@ -205,7 +205,7 @@ html,body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:va
       Перед использованием:<br><br>
       🪙 <b>Коины невозвратны</b> — использованные ставки не возвращаются<br><br>
       🏆 <b>Победитель</b> — последний поставивший ставку до истечения таймера<br><br>
-      🎁 <b>Скидка <span id="termsDiscount">15,000</span> сум</b> — для участников проигравшего аукциона<br><br>
+      🎁 <b>Скидка <span id="termsDiscount">15</span>%</b> — для участников проигравшего аукциона<br><br>
       🗳 <b>Голосование</b> — игроки выбирают следующий лот<br><br>
       ⚠️ <b>Администрация</b> оставляет право аннулировать результаты при нарушениях
     </div>
@@ -293,7 +293,10 @@ html,body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:va
 const WS_URL = 'wss://uc-auction-backend-production.up.railway.app';
 const API_URL = WS_URL.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
 let BOT = 'ucbid_uz_bot'; // overwritten by /prices once loaded, in case the bot is ever renamed
-let MAX_DISCOUNT = 15000; // overwritten by /prices once loaded, matches the admin's live setting
+// A flat сум discount was hugely unfair across lots of different market
+// prices (27% off the cheapest lot, 6% off the priciest) — a percentage of
+// the specific lot's own market price keeps it proportional everywhere.
+let DISCOUNT_PERCENT = 15; // overwritten by /prices once loaded, matches the admin's live setting
 // Mutable — the server sends the real per-auction max in `maxTime` (driven by
 // the admin's "Таймер аукциона" setting). Left as a hardcoded constant, the
 // countdown bar's width% (timeLeft/MAX_TIME) went wrong the moment an admin
@@ -582,11 +585,13 @@ function showResult(msg) {
   if (isWinner) {
     html = `<div class="result-win"><div class="ico">🏆</div><h3>Вы победили!</h3><p>Приз: <strong>${msg.prize}</strong><br>Итоговая цена: <strong>${(msg.finalPrice||0).toLocaleString('ru-RU')} сум</strong><br><br>Зайдите в бота и введите PUBG ID.</p></div>`;
   } else if (state.myAuctionCoins > 0) {
-    const fp = Math.max(0, (msg.marketPrice||96000) - MAX_DISCOUNT);
+    const marketPrice = msg.marketPrice || 96000;
+    const discountAmount = Math.round(marketPrice * (DISCOUNT_PERCENT / 100));
+    const fp = Math.max(0, marketPrice - discountAmount);
     html = `<div class="result-lose">
       <div class="top"><div style="font-size:36px">🎁</div><div><h3>Специальное предложение!</h3></div></div>
       <p>Спасибо за участие!</p>
-      <div class="discount-num">Скидка ${MAX_DISCOUNT.toLocaleString('ru-RU')} сум</div>
+      <div class="discount-num">Скидка ${DISCOUNT_PERCENT}% (${discountAmount.toLocaleString('ru-RU')} сум)</div>
       <p>Купи <strong>${msg.prize}</strong> за <strong>${fp.toLocaleString('ru-RU')} сум</strong> вместо ${(msg.marketPrice||0).toLocaleString('ru-RU')} сум.</p>
       <button class="discount-btn" onclick="openDiscount('${msg.prize}')">Получить скидку — ${fp.toLocaleString('ru-RU')} сум</button>
     </div>`;
@@ -744,10 +749,10 @@ async function loadPrices() {
       direct: data.direct || {},
       coinCost: data.coinCost || 500
     };
-    if (typeof data.maxDiscount === 'number') MAX_DISCOUNT = data.maxDiscount; // 0 is a valid "discount disabled" value, not "unset"
+    if (typeof data.discountPercent === 'number') DISCOUNT_PERCENT = data.discountPercent; // 0 is a valid "discount disabled" value, not "unset"
     if (data.botUsername) BOT = data.botUsername;
     const termsDiscountEl = document.getElementById('termsDiscount');
-    if (termsDiscountEl) termsDiscountEl.textContent = MAX_DISCOUNT.toLocaleString('ru-RU');
+    if (termsDiscountEl) termsDiscountEl.textContent = DISCOUNT_PERCENT;
     renderShop();
   } catch(e) {}
 }
